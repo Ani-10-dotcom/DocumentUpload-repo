@@ -351,8 +351,12 @@ export const DEFAULT_SETTINGS = {
 };
 const SETTINGS_KEY = 'rag-settings';
 export function getSettings() {
-  try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; }
-  catch { return { ...DEFAULT_SETTINGS }; }
+  let s;
+  try { s = { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; }
+  catch { s = { ...DEFAULT_SETTINGS }; }
+  // Opened straight from disk (file://): there is no /api/chat, so show matching passages instead
+  if (location.protocol === 'file:' && s.mode === 'proxy') s.mode = 'none';
+  return s;
 }
 export function saveSettings(s) {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {}
