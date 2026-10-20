@@ -331,9 +331,10 @@ export async function search(query, k = 6) {
 }
 
 /* ───────────────────────── Settings ───────────────────────── */
-export const DEFAULT_PROMPT = `You are a helpful assistant that answers questions using ONLY the document excerpts provided in CONTEXT.
-- If the answer is not in the context, say you couldn't find it in the uploaded documents. Do not make things up.
-- Cite the excerpts you used with their numbers, like [1] or [2][3].
+export const DEFAULT_PROMPT = `You are a helpful assistant. You have access to excerpts from the user's uploaded documents in CONTEXT.
+- If the question is about the uploaded documents, or the CONTEXT contains the answer, answer from the CONTEXT and cite the excerpts you used with their numbers, like [1] or [2][3].
+- If the CONTEXT does not cover the question (for example a general knowledge question), answer it from your own general knowledge. Start that answer with "This isn't in the uploaded documents, but generally:" and do not add citations.
+- Never invent document content or citations. If the user asks about the documents and the answer isn't there, say so.
 - Be clear and concise. Use bullet points or tables when they help.
 - Reply in the same language the user writes in.`;
 
@@ -346,10 +347,10 @@ export const DEFAULT_SETTINGS = {
   temperature: 0.2,
   topK: 6,
   botName: 'Document Assistant',
-  welcome: 'Ask me anything about the uploaded documents.',
+  welcome: 'Ask about your uploaded documents, or anything else.',
   systemPrompt: DEFAULT_PROMPT,
 };
-const SETTINGS_KEY = 'rag-settings';
+const SETTINGS_KEY = 'rag-settings-v2'; // v2: prompt also answers general questions
 export function getSettings() {
   let s;
   try { s = { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; }
@@ -420,7 +421,7 @@ export async function streamChat(messages, settings, onToken, signal) {
 
 // Fallback answer when no LLM is connected: show the best passages.
 export function extractiveAnswer(contexts) {
-  if (!contexts.length) return "I couldn't find anything about that in the uploaded documents.";
+  if (!contexts.length) return "I couldn't find anything about that in the uploaded documents. General questions need the Groq connection (available on the live site once GROQ_API_KEY is set).";
   return '_No language model is connected yet, so here are the most relevant passages from the documents:_\n\n' +
     contexts.slice(0, 3).map((c, i) => `**[${i + 1}] ${c.docName}${c.loc ? ` — ${c.loc}` : ''}**\n\n> ${c.text.slice(0, 600).replace(/\n/g, '\n> ')}`).join('\n\n');
 }

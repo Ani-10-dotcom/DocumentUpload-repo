@@ -125,7 +125,7 @@
     <div class="scroll" id="scroll">
       <div class="hero" id="hero">
         <h1 id="heroTitle">How can I help?</h1>
-        <p id="heroSub">Ask me anything about the uploaded documents.</p>
+        <p id="heroSub">Ask about your uploaded documents, or anything else.</p>
         <div class="suggest" id="suggest"></div>
         <div class="no-docs hidden" id="noDocs">No documents have been added yet. <a href="index.html">Upload documents</a> to get started.</div>
       </div>
@@ -134,13 +134,13 @@
 
     <div class="composer-wrap">
       <form class="composer" id="composer">
-        <textarea id="input" rows="1" placeholder="Ask a question about your documents…" autocomplete="off"></textarea>
+        <textarea id="input" rows="1" placeholder="Ask about your documents, or anything else…" autocomplete="off"></textarea>
         <button class="send" id="sendBtn" type="submit" disabled title="Send">
           <svg class="i" id="sendIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 19V5m0 0-6 6m6-6 6 6"/></svg>
           <svg class="i hidden" id="stopIcon" viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
         </button>
       </form>
-      <div class="foot">Answers come from the uploaded documents and may contain mistakes — check the sources.</div>
+      <div class="foot">Answers with [1] citations come from your documents; others come from the AI model. Both may contain mistakes.</div>
     </div>
   </div>
 </div>
@@ -349,6 +349,8 @@ async function ask(question) {
       await R.streamChat(R.buildMessages({ question, contexts: sources, history, settings }), settings, (t) => {
         text += t; view.set(text, sources, { done: false }); scrollDown();
       }, ctrl.signal);
+      // A general-knowledge answer has no [n] citations, so don't show document sources under it
+      if (!/\[\d{1,2}\]/.test(text)) sources = [];
       view.set(text || '_(The model returned an empty response.)_', sources);
     }
     conv.messages.push({ role: 'assistant', content: text, sources });
