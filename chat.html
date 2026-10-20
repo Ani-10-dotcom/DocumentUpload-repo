@@ -359,7 +359,7 @@ async function ask(question) {
     } else {
       console.error(err);
       const msg = /Failed to fetch|NetworkError|404/.test(err.message)
-        ? "Couldn't reach the language model. The chatbot needs the server (node server.js or Vercel) with GROQ_API_KEY set."
+        ? "Couldn't reach the language model. The chatbot needs the server (node dev-server.js or Vercel) with GROQ_API_KEY set."
         : err.message;
       view.set(msg, [], { error: true });
       conv.messages.push({ role: 'assistant', content: msg, error: true });

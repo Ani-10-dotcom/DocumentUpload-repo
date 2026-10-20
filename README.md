@@ -23,7 +23,7 @@ Requires Node.js 18+ — no `npm install` needed.
 
 ```bash
 cp .env.example .env      # then paste your Groq key into GROQ_API_KEY
-node server.js
+node dev-server.js
 ```
 
 Open http://localhost:3000/, upload documents, then click **Open chatbot**.
@@ -57,8 +57,8 @@ index.html          Document upload page (home)
 chat.html           Chatbot page
 assets/rag.js       RAG engine: extraction, chunking, IndexedDB, BM25 search, prompt, LLM streaming
 assets/styles.css   Shared styles (light/dark)
-api/chat.js         Server-side LLM proxy (Vercel Edge function; also used by server.js)
-server.js           Local dev server (static files + /api/chat)
+api/chat.js         Server-side LLM proxy (Vercel Edge function; also used by dev-server.js)
+dev-server.js       Local dev server (static files + /api/chat)
 .env.example        LLM configuration examples
 ```
 

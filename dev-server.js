@@ -1,5 +1,5 @@
 // Local development server — no dependencies. Requires Node.js 18+.
-// Usage:  node server.js        then open http://localhost:3000
+// Usage:  node dev-server.js        then open http://localhost:3000
 // Put your LLM settings in a .env file (see .env.example).
 import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';

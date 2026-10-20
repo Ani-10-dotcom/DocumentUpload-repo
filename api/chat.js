@@ -1,5 +1,5 @@
 // /api/chat — server-side proxy to the LLM so the API key never reaches the browser.
-// Runs on Vercel (Edge runtime) and locally via `node server.js`.
+// Runs on Vercel (Edge runtime) and locally via `node dev-server.js`.
 //
 // Environment variables:
 // Defaults to Groq — only GROQ_API_KEY is required.
