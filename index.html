@@ -31,7 +31,17 @@
   .bar { width: 120px; height: 6px; background: var(--bg-soft); border-radius: 9px; overflow: hidden; flex: none; }
   .bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
 
+  .docs-head { display: flex; align-items: center; justify-content: space-between; margin: 24px 0 10px; }
+  .docs-head h3 { font-size: 15px; margin: 0; }
+  .doc-list { display: flex; flex-direction: column; gap: 8px; }
+  .doc { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+  .doc .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  .doc .meta { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .doc .icon-btn:hover { color: var(--danger); }
+  .empty-docs { font-size: 14px; color: var(--muted); padding: 14px; text-align: center; border: 1px dashed var(--border); border-radius: 10px; }
+
   @media (max-width: 600px) {
+    .doc .meta { display: none; }
     .topbar { padding-left: 16px; padding-right: 16px; }
     .bar { width: 60px; }
   }
@@ -58,6 +68,9 @@
       <div class="muted small">You can select several files at once</div>
     </label>
     <div class="queue" id="queue"></div>
+
+    <div class="docs-head"><h3 id="docsTitle">Uploaded documents</h3></div>
+    <div class="doc-list" id="docList"></div>
   </div>
 </main>
 
@@ -72,6 +85,26 @@ const drop = $('#drop');
 ['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
 drop.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files));
 $('#fileInput').onchange = (e) => { handleFiles(e.target.files); e.target.value = ''; };
+
+// List of documents already stored in this browser
+async function renderDocs() {
+  const docs = await R.listDocs();
+  $('#docsTitle').textContent = `Uploaded documents (${docs.length})`;
+  $('#docList').innerHTML = docs.length ? docs.map((d) => `
+    <div class="doc">
+      <div class="name" title="${esc(d.name)}">📄 ${esc(d.name)}</div>
+      <div class="meta">${R.formatBytes(d.size)} · ${new Date(d.addedAt).toLocaleDateString()}</div>
+      <button class="icon-btn" data-del="${d.id}" title="Delete ${esc(d.name)}" aria-label="Delete ${esc(d.name)}">
+        <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg>
+      </button>
+    </div>`).join('') : '<div class="empty-docs">No documents yet. Upload a file above to get started.</div>';
+}
+$('#docList').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-del]');
+  if (b) { b.disabled = true; await R.deleteDoc(b.dataset.del); }
+});
+R.onKBChange((kind) => kind === 'kb' && renderDocs());
+renderDocs();
 
 let running = Promise.resolve();
 function handleFiles(files) {
@@ -90,6 +123,7 @@ function handleFiles(files) {
         bar.parentElement.remove();
         st.classList.add('ok');
         st.textContent = '✓ Uploaded';
+        setTimeout(() => row.remove(), 4000);
       } catch (err) {
         console.error(err);
         bar.parentElement.remove();
