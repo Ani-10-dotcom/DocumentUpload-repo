@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Document Upload</title>
+<link rel="stylesheet" href="assets/styles.css" />
+<style>
+  body { background: var(--bg-soft); }
+  .topbar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 12px; padding: 12px 24px; background: var(--panel); border-bottom: 1px solid var(--border); }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; min-width: 0; }
+  .brand span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .logo { width: 30px; height: 30px; flex: none; border-radius: 9px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-weight: 800; }
+  .topbar .spacer { flex: 1; }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 60px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
+  .card h2 { font-size: 17px; margin: 0 0 4px; }
+  .card > .muted { margin: 0 0 16px; font-size: 14px; }
+
+  .drop { display: block; border: 2px dashed var(--border); border-radius: var(--radius); padding: 40px 20px; text-align: center; cursor: pointer; transition: .15s; background: var(--bg); }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop .big { font-size: 16px; font-weight: 600; margin: 8px 0 4px; }
+  .drop svg { width: 36px; height: 36px; color: var(--accent); }
+
+  .queue { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .q { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+  .q .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  .q .st { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .q .st.ok { color: var(--accent); font-weight: 600; }
+  .q .st.err { color: var(--danger); white-space: normal; }
+  .bar { width: 120px; height: 6px; background: var(--bg-soft); border-radius: 9px; overflow: hidden; flex: none; }
+  .bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+
+  @media (max-width: 600px) {
+    .topbar { padding-left: 16px; padding-right: 16px; }
+    .bar { width: 60px; }
+  }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="brand"><div class="logo">A</div><span>Document Assistant</span></div>
+  <div class="spacer"></div>
+  <a class="btn primary" href="chat.html">
+    <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    Open chatbot
+  </a>
+</div>
+
+<main>
+  <div class="card">
+    <h2>Upload documents</h2>
+    <p class="muted">PDF, Word (.docx), PowerPoint (.pptx), Excel/CSV, text, Markdown, HTML, JSON, RTF and images (read with OCR).</p>
+    <label class="drop" id="drop">
+      <input type="file" id="fileInput" multiple hidden />
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4m0 0-4 4m4-4 4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+      <div class="big">Drop files here or click to browse</div>
+      <div class="muted small">You can select several files at once</div>
+    </label>
+    <div class="queue" id="queue"></div>
+  </div>
+</main>
+
+<script type="module">
+import * as R from './assets/rag.js';
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+const drop = $('#drop');
+['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files));
+$('#fileInput').onchange = (e) => { handleFiles(e.target.files); e.target.value = ''; };
+
+let running = Promise.resolve();
+function handleFiles(files) {
+  [...files].forEach((file) => {
+    const row = document.createElement('div');
+    row.className = 'q';
+    row.innerHTML = `<div class="name">${esc(file.name)}</div><div class="bar"><i></i></div><div class="st">Waiting…</div>`;
+    $('#queue').prepend(row);
+    const bar = row.querySelector('.bar i'), st = row.querySelector('.st');
+    running = running.then(async () => {
+      try {
+        await R.ingestFile(file, ({ stage, progress }) => {
+          st.textContent = stage + (progress < 1 ? ` ${Math.round(progress * 100)}%` : '…');
+          bar.style.width = Math.round(progress * 100) + '%';
+        });
+        bar.parentElement.remove();
+        st.classList.add('ok');
+        st.textContent = '✓ Uploaded';
+      } catch (err) {
+        console.error(err);
+        bar.parentElement.remove();
+        st.classList.add('err');
+        st.textContent = err.message || 'Failed to read this file.';
+      }
+    });
+  });
+}
+</script>
+</body>
+</html>

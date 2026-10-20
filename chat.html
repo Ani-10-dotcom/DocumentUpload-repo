@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
+<title>Document Assistant</title>
+<link rel="stylesheet" href="assets/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<style>
+  body { overflow: hidden; }
+  .layout { display: flex; height: 100dvh; }
+
+  /* Sidebar */
+  .sidebar { width: 260px; flex: none; background: var(--bg-sidebar); display: flex; flex-direction: column; padding: 10px; gap: 8px; transition: margin .2s; }
+  .sidebar.closed { margin-left: -260px; }
+  .side-top { display: flex; gap: 6px; align-items: center; }
+  .new-chat { flex: 1; justify-content: flex-start; background: transparent; border-color: var(--border); }
+  .convs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+  .convs h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 12px 8px 4px; }
+  .conv { display: flex; align-items: center; gap: 4px; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+  .conv:hover { background: var(--bg-soft); }
+  .conv.active { background: var(--border); }
+  .conv span { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .conv .icon-btn { opacity: 0; padding: 2px; }
+  .conv:hover .icon-btn, .conv.active .icon-btn { opacity: 1; }
+  .kb-box { border-top: 1px solid var(--border); padding: 10px 6px 2px; font-size: 13px; }
+  .kb-box summary { cursor: pointer; display: flex; align-items: center; gap: 8px; list-style: none; font-weight: 600; }
+  .kb-box summary::-webkit-details-marker { display: none; }
+  .kb-list { margin: 8px 0 0; padding: 0; list-style: none; max-height: 180px; overflow-y: auto; }
+  .kb-list li { padding: 4px 2px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+  .dot.off { background: #c9a227; }
+
+  /* Main */
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
+  .header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; height: 54px; flex: none; }
+  .header .title { font-weight: 600; font-size: 16px; }
+  .header .spacer { flex: 1; }
+  .scroll { flex: 1; overflow-y: auto; }
+  .thread { max-width: 780px; margin: 0 auto; padding: 8px 20px 24px; }
+
+  .msg { display: flex; gap: 14px; margin: 22px 0; }
+  .msg.user { justify-content: flex-end; }
+  .msg.user .bubble { background: var(--user-bubble); padding: 10px 16px; border-radius: 20px; max-width: 75%; white-space: pre-wrap; word-wrap: break-word; }
+  .avatar { width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 13px; margin-top: 2px; }
+  .msg.bot .content { flex: 1; min-width: 0; }
+  .msg.bot .md { word-wrap: break-word; }
+  .typing { display: inline-flex; gap: 4px; padding: 8px 0; }
+  .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+  .err { color: var(--danger); }
+
+  .msg-actions { display: flex; gap: 2px; margin-top: 6px; }
+  .sources { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .src { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 99px; padding: 3px 10px 3px 4px; font-size: 12.5px; background: var(--bg); cursor: pointer; max-width: 100%; }
+  .src:hover { background: var(--bg-soft); }
+  .src .cite { margin: 0; }
+  .src span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .src-detail { margin-top: 8px; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: var(--bg-soft); font-size: 13.5px; }
+  .src-detail header { font-weight: 600; margin-bottom: 6px; display: flex; gap: 8px; align-items: center; }
+  .src-detail pre { margin: 0; white-space: pre-wrap; font-family: inherit; max-height: 220px; overflow: auto; }
+
+  /* Empty state */
+  .hero { max-width: 720px; margin: 0 auto; padding: 12vh 20px 20px; text-align: center; }
+  .hero h1 { font-size: 28px; margin: 0 0 8px; font-weight: 600; }
+  .hero p { color: var(--muted); margin: 0 0 28px; }
+  .suggest { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; text-align: left; }
+  .suggest button { border: 1px solid var(--border); background: var(--bg); border-radius: 14px; padding: 12px 14px; cursor: pointer; font-size: 14px; }
+  .suggest button:hover { background: var(--bg-soft); }
+  .suggest b { display: block; font-weight: 600; }
+  .suggest span { color: var(--muted); font-size: 13px; }
+  .no-docs { margin-top: 18px; padding: 14px; border-radius: 12px; background: var(--bg-soft); border: 1px solid var(--border); font-size: 14px; color: var(--muted); }
+
+  /* Composer */
+  .composer-wrap { flex: none; padding: 0 20px 14px; }
+  .composer { max-width: 780px; margin: 0 auto; display: flex; align-items: flex-end; gap: 8px; border: 1px solid var(--border); background: var(--bg-soft); border-radius: 26px; padding: 8px 8px 8px 18px; box-shadow: var(--shadow); }
+  .composer textarea { flex: 1; border: 0; outline: none; background: transparent; resize: none; max-height: 200px; padding: 8px 0; line-height: 1.5; }
+  .send { width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--text); color: var(--bg); cursor: pointer; display: grid; place-items: center; flex: none; }
+  .send:disabled { opacity: .3; cursor: default; }
+  .foot { text-align: center; font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+  .scrim { display: none; }
+  @media (max-width: 800px) {
+    .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 30; box-shadow: var(--shadow); }
+    .scrim:not(.hidden) { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 25; }
+    .thread { padding: 8px 16px 20px; }
+    .composer-wrap { padding: 0 12px 10px; }
+    .msg.user .bubble { max-width: 88%; }
+    .hero { padding-top: 6vh; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="side-top">
+      <button class="btn new-chat" id="newChat">
+        <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+        New chat
+      </button>
+      <button class="icon-btn" id="closeSide" title="Close sidebar"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg></button>
+    </div>
+    <div class="convs" id="convs"></div>
+    <details class="kb-box" id="kbBox">
+      <summary><span class="dot" id="kbDot"></span><span id="kbLabel">Knowledge base</span></summary>
+      <ul class="kb-list" id="kbList"></ul>
+    </details>
+  </aside>
+  <div class="scrim hidden" id="scrim"></div>
+
+  <div class="main">
+    <div class="header">
+      <button class="icon-btn hidden" id="openSide" title="Open sidebar"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg></button>
+      <div class="title" id="botTitle">Document Assistant</div>
+      <div class="spacer"></div>
+      <a class="btn ghost" href="index.html">
+        <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4m0 0-4 4m4-4 4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+        Upload documents
+      </a>
+      <button class="icon-btn" id="themeBtn" title="Toggle theme"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+    </div>
+
+    <div class="scroll" id="scroll">
+      <div class="hero" id="hero">
+        <h1 id="heroTitle">How can I help?</h1>
+        <p id="heroSub">Ask me anything about the uploaded documents.</p>
+        <div class="suggest" id="suggest"></div>
+        <div class="no-docs hidden" id="noDocs">No documents have been added yet. <a href="index.html">Upload documents</a> to get started.</div>
+      </div>
+      <div class="thread" id="thread"></div>
+    </div>
+
+    <div class="composer-wrap">
+      <form class="composer" id="composer">
+        <textarea id="input" rows="1" placeholder="Ask a question about your documents…" autocomplete="off"></textarea>
+        <button class="send" id="sendBtn" type="submit" disabled title="Send">
+          <svg class="i" id="sendIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 19V5m0 0-6 6m6-6 6 6"/></svg>
+          <svg class="i hidden" id="stopIcon" viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+        </button>
+      </form>
+      <div class="foot">Answers come from the uploaded documents and may contain mistakes — check the sources.</div>
+    </div>
+  </div>
+</div>
+<div class="toast-wrap" id="toasts"></div>
+
+<script type="module">
+import * as R from './assets/rag.js';
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function toast(msg) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; $('#toasts').appendChild(t); setTimeout(() => t.remove(), 2600); }
+const store = {
+  get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+
+/* ───────── Markdown ───────── */
+// Tiny fallback in case the markdown library can't load (offline / blocked CDN)
+function miniMd(t) {
+  const inline = (s) => esc(s)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  const out = []; let list = null;
+  for (const line of t.split('\n')) {
+    const li = line.match(/^\s*(?:[-*•]|\d+[.)])\s+(.*)/);
+    const h = line.match(/^(#{1,3})\s+(.*)/);
+    const q = line.match(/^>\s?(.*)/);
+    if (li) { (list ||= []).push(`<li>${inline(li[1])}</li>`); continue; }
+    if (list) { out.push(`<ul>${list.join('')}</ul>`); list = null; }
+    if (h) out.push(`<h${h[1].length + 1}>${inline(h[2])}</h${h[1].length + 1}>`);
+    else if (q) out.push(`<blockquote>${inline(q[1])}</blockquote>`);
+    else if (line.trim()) out.push(`<p>${inline(line)}</p>`);
+  }
+  if (list) out.push(`<ul>${list.join('')}</ul>`);
+  return out.join('');
+}
+function renderMd(text, nSources = 0) {
+  let html = window.marked && window.DOMPurify
+    ? DOMPurify.sanitize(marked.parse(text, { breaks: true, gfm: true }))
+    : miniMd(text);
+  if (nSources) html = html.replace(/\[(\d{1,2})\]/g, (m, n) => (+n >= 1 && +n <= nSources ? `<button class="cite" data-cite="${n}">${n}</button>` : m));
+  return html;
+}
+
+/* ───────── Theme ───────── */
+const savedTheme = store.get('rag-theme', null);
+if (savedTheme) document.documentElement.dataset.theme = savedTheme;
+$('#themeBtn').onclick = () => {
+  const dark = document.documentElement.dataset.theme
+    ? document.documentElement.dataset.theme === 'dark'
+    : matchMedia('(prefers-color-scheme: dark)').matches;
+  document.documentElement.dataset.theme = dark ? 'light' : 'dark';
+  store.set('rag-theme', document.documentElement.dataset.theme);
+};
+
+/* ───────── Sidebar ───────── */
+const mobile = () => matchMedia('(max-width: 800px)').matches;
+function setSide(open) {
+  $('#sidebar').classList.toggle('closed', !open);
+  $('#openSide').classList.toggle('hidden', open);
+  $('#scrim').classList.toggle('hidden', !(open && mobile()));
+}
+$('#closeSide').onclick = () => setSide(false);
+$('#openSide').onclick = () => setSide(true);
+$('#scrim').onclick = () => setSide(false);
+setSide(!mobile());
+
+/* ───────── Conversations ───────── */
+let convs = store.get('rag-convs', []);
+let currentId = null;
+const current = () => convs.find((c) => c.id === currentId);
+const saveConvs = () => store.set('rag-convs', convs.slice(0, 50));
+
+function renderConvList() {
+  const sorted = [...convs].sort((a, b) => b.updated - a.updated);
+  const day = 864e5, now = Date.now();
+  const groups = [['Today', (c) => now - c.updated < day], ['Previous 7 days', (c) => now - c.updated < 7 * day], ['Older', () => true]];
+  const used = new Set(); let html = '';
+  for (const [label, test] of groups) {
+    const items = sorted.filter((c) => !used.has(c.id) && test(c));
+    items.forEach((c) => used.add(c.id));
+    if (!items.length) continue;
+    html += `<h4>${label}</h4>` + items.map((c) => `
+      <div class="conv ${c.id === currentId ? 'active' : ''}" data-id="${c.id}">
+        <span>${esc(c.title)}</span>
+        <button class="icon-btn" data-del="${c.id}" title="Delete chat"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></button>
+      </div>`).join('');
+  }
+  $('#convs').innerHTML = html;
+}
+$('#convs').onclick = (e) => {
+  const del = e.target.closest('[data-del]');
+  if (del) {
+    convs = convs.filter((c) => c.id !== del.dataset.del); saveConvs();
+    if (currentId === del.dataset.del) newChat(); else renderConvList();
+    return;
+  }
+  const item = e.target.closest('.conv');
+  if (item) { openConv(item.dataset.id); if (mobile()) setSide(false); }
+};
+function newChat() {
+  stop();
+  currentId = null;
+  $('#thread').innerHTML = '';
+  $('#hero').classList.remove('hidden');
+  renderConvList();
+  $('#input').focus();
+}
+$('#newChat').onclick = () => { newChat(); if (mobile()) setSide(false); };
+function openConv(id) {
+  stop();
+  currentId = id;
+  const c = current();
+  $('#hero').classList.add('hidden');
+  $('#thread').innerHTML = '';
+  c.messages.forEach((m) => (m.role === 'user' ? addUser(m.content) : addBot(m)));
+  renderConvList();
+  scrollDown(true);
+}
+
+/* ───────── Rendering messages ───────── */
+function scrollDown(force) {
+  const s = $('#scroll');
+  if (force || s.scrollHeight - s.scrollTop - s.clientHeight < 160) s.scrollTop = s.scrollHeight;
+}
+function addUser(text) {
+  const el = document.createElement('div');
+  el.className = 'msg user';
+  el.innerHTML = `<div class="bubble">${esc(text)}</div>`;
+  $('#thread').appendChild(el);
+}
+function addBot(m = {}) {
+  const el = document.createElement('div');
+  el.className = 'msg bot';
+  el.innerHTML = `<div class="avatar">AI</div><div class="content"><div class="md"></div><div class="sources"></div><div class="src-slot"></div><div class="msg-actions hidden">
+    <button class="icon-btn" data-copy title="Copy"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
+  </div></div>`;
+  $('#thread').appendChild(el);
+  const view = {
+    el,
+    md: el.querySelector('.md'),
+    set(text, sources = [], { done = true, error = false } = {}) {
+      view.text = text; view.sources = sources;
+      if (error) view.md.innerHTML = `<p class="err">⚠ ${esc(text)}</p>`;
+      else view.md.innerHTML = text ? renderMd(text, sources.length) : '<div class="typing"><i></i><i></i><i></i></div>';
+      if (done) {
+        el.querySelector('.msg-actions').classList.toggle('hidden', error || !text);
+        el.querySelector('.sources').innerHTML = sources.map((s, i) =>
+          `<button class="src" data-cite="${i + 1}"><span class="cite">${i + 1}</span><span>${esc(s.docName)}${s.loc ? ' · ' + esc(s.loc) : ''}</span></button>`).join('');
+      }
+    },
+  };
+  if (m.content !== undefined) view.set(m.content, m.sources || [], { error: m.error });
+  else view.set('', [], { done: false });
+  el.addEventListener('click', (e) => {
+    const c = e.target.closest('[data-cite]');
+    if (c) {
+      const s = view.sources[+c.dataset.cite - 1]; if (!s) return;
+      const slot = el.querySelector('.src-slot');
+      if (slot.dataset.open === c.dataset.cite) { slot.innerHTML = ''; slot.dataset.open = ''; return; }
+      slot.dataset.open = c.dataset.cite;
+      slot.innerHTML = `<div class="src-detail"><header><span class="cite">${c.dataset.cite}</span>${esc(s.docName)}${s.loc ? ` <span class="muted">· ${esc(s.loc)}</span>` : ''}</header><pre>${esc(s.text)}</pre></div>`;
+    }
+    if (e.target.closest('[data-copy]')) navigator.clipboard?.writeText(view.text).then(() => toast('Copied'));
+  });
+  return view;
+}
+
+/* ───────── Ask ───────── */
+let controller = null;
+function busy(on) {
+  $('#sendIcon').classList.toggle('hidden', on);
+  $('#stopIcon').classList.toggle('hidden', !on);
+  $('#sendBtn').title = on ? 'Stop' : 'Send';
+  $('#sendBtn').disabled = !on && !$('#input').value.trim();
+}
+function stop() { if (controller) { controller.abort(); controller = null; } }
+
+async function ask(question) {
+  question = question.trim(); if (!question || controller) return;
+  const settings = R.getSettings();
+  if (!currentId) {
+    const c = { id: crypto.randomUUID(), title: question.slice(0, 60), messages: [], updated: Date.now() };
+    convs.unshift(c); currentId = c.id;
+  }
+  const conv = current();
+  const history = conv.messages.filter((m) => !m.error).map((m) => ({ role: m.role, content: m.content }));
+  conv.messages.push({ role: 'user', content: question }); conv.updated = Date.now(); saveConvs(); renderConvList();
+  $('#hero').classList.add('hidden');
+  addUser(question);
+  const view = addBot();
+  scrollDown(true);
+
+  controller = new AbortController(); busy(true);
+  const ctrl = controller;
+  let text = '', sources = [];
+  try {
+    // Use the previous question too, so follow-ups like "tell me more" still retrieve the right passages
+    const lastUser = [...history].reverse().find((m) => m.role === 'user');
+    sources = await R.search(question + (question.split(/\s+/).length < 6 && lastUser ? ' ' + lastUser.content : ''), settings.topK);
+    if (settings.mode === 'none') {
+      text = R.extractiveAnswer(sources);
+      view.set(text, sources);
+    } else {
+      await R.streamChat(R.buildMessages({ question, contexts: sources, history, settings }), settings, (t) => {
+        text += t; view.set(text, sources, { done: false }); scrollDown();
+      }, ctrl.signal);
+      view.set(text || '_(The model returned an empty response.)_', sources);
+    }
+    conv.messages.push({ role: 'assistant', content: text, sources });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      view.set(text ? text + '\n\n_(stopped)_' : '_(stopped)_', sources);
+      conv.messages.push({ role: 'assistant', content: text || '_(stopped)_', sources });
+    } else {
+      console.error(err);
+      const msg = /Failed to fetch|NetworkError|404/.test(err.message)
+        ? "Couldn't reach the language model. The chatbot needs the server (node server.js or Vercel) with GROQ_API_KEY set."
+        : err.message;
+      view.set(msg, [], { error: true });
+      conv.messages.push({ role: 'assistant', content: msg, error: true });
+    }
+  } finally {
+    if (controller === ctrl) controller = null;
+    conv.updated = Date.now(); saveConvs(); busy(false); scrollDown();
+  }
+}
+
+/* ───────── Composer ───────── */
+const input = $('#input');
+function autosize() { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 200) + 'px'; }
+input.addEventListener('input', () => { autosize(); if (!controller) $('#sendBtn').disabled = !input.value.trim(); });
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('#composer').requestSubmit(); }
+});
+$('#composer').addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (controller) return stop();
+  const q = input.value; input.value = ''; autosize(); ask(q);
+});
+
+/* ───────── Knowledge base status + suggestions ───────── */
+async function refreshKB() {
+  const docs = await R.listDocs();
+  const s = R.getSettings();
+  $('#kbLabel').textContent = `${docs.length} document${docs.length === 1 ? '' : 's'} loaded`;
+  $('#kbDot').classList.toggle('off', !docs.length);
+  $('#kbList').innerHTML = docs.map((d) => `<li title="${esc(d.name)}">📄 ${esc(d.name)}</li>`).join('') || '<li>None yet</li>';
+  $('#noDocs').classList.toggle('hidden', docs.length > 0);
+  $('#botTitle').textContent = s.botName;
+  document.title = s.botName;
+  $('#heroSub').textContent = s.welcome;
+  const first = docs[0]?.name.replace(/\.[^.]+$/, '');
+  const ideas = docs.length ? [
+    ['Summarize', first ? `the document “${first}”` : 'the main points'],
+    ['What are', 'the key facts and figures mentioned?'],
+    ['List', 'any dates, deadlines or important names'],
+    ['Explain', 'the most important section in simple words'],
+  ] : [];
+  $('#suggest').innerHTML = ideas.map(([a, b]) => `<button data-q="${esc(a + ' ' + b)}"><b>${esc(a)}</b><span>${esc(b)}</span></button>`).join('');
+}
+$('#suggest').onclick = (e) => { const b = e.target.closest('[data-q]'); if (b) ask(b.dataset.q); };
+R.onKBChange(refreshKB);
+
+renderConvList();
+refreshKB();
+R.syncPublishedKB().then((changed) => changed && refreshKB());
+input.focus();
+</script>
+</body>
+</html>

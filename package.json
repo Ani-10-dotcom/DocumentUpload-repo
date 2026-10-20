@@ -1,0 +1,9 @@
+{
+  "name": "document-upload",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "RAG chatbot: admin uploads documents, users chat with them.",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" }
+}
